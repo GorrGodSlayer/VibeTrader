@@ -1,0 +1,4 @@
+# Only needed for LIVE trading (signing Solana transactions).
+-r requirements.txt
+solders>=0.21
+base58>=2.1

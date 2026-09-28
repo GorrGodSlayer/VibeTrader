@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VibeTrader 95</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+<link rel="stylesheet" href="/static/win95.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div id="ticker"><span class="inner" id="tickerText">*** WELCOME TO VIBETRADER 95 *** NOT FINANCIAL ADVICE *** NUMBER GO UP *** </span></div>
+
+<div id="desktop">
+  <div class="icons">
+    <div class="icon" data-open="w-portfolio"><div class="glyph">💰</div><span>PORTFOLIO.EXE</span></div>
+    <div class="icon" data-open="w-thoughts"><div class="glyph">🧠</div><span>GROQ_THOUGHTS.TXT</span></div>
+    <div class="icon" data-open="w-trades"><div class="glyph">📜</div><span>TRADES.LOG</span></div>
+    <div class="icon" data-open="w-brain"><div class="glyph">🎓</div><span>BRAIN.EXE</span></div>
+    <div class="icon" data-open="w-settings"><div class="glyph">⚙️</div><span>SETTINGS.INI</span></div>
+    <div class="icon" data-open="w-live"><div class="glyph">☢️</div><span>LIVE_MODE.BAT</span></div>
+  </div>
+  <div class="watermark">VibeTrader 95<small>Memecoin Edition &middot; Build 420.69</small></div>
+
+  <!-- PORTFOLIO -->
+  <div class="window raised" id="w-portfolio" style="left:110px; top:10px; width:560px; height:390px">
+    <div class="titlebar"><span>💰</span><span class="t">C:\VIBE\PORTFOLIO.EXE</span></div>
+    <div class="menubar"><span><u>F</u>ile</span><span><u>E</u>dit</span><span><u>M</u>oney</span><span><u>H</u>elp me</span></div>
+    <div class="wbody">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+        <div class="sunken lcd" style="flex:1; min-width:200px">
+          <div id="modeBadge" class="blink">PAPER MODE</div>
+          <div>EQUITY: <b id="eqVal">$0.00</b></div>
+          <div>CASH: <span id="cashVal">$0.00</span></div>
+        </div>
+        <div style="text-align:center; min-width:150px">
+          <div id="pnlBig" class="bigmoney win">+$0.00</div>
+          <div id="pnlPct">+0.00%</div>
+        </div>
+      </div>
+      <div style="margin:8px 0; display:flex; gap:6px; flex-wrap:wrap">
+        <button class="btn go" id="btnStart">▶ START</button>
+        <button class="btn" id="btnStop">■ STOP</button>
+        <span id="engineState" style="align-self:center"></span>
+      </div>
+      <div class="sunken" style="height:170px; overflow:auto">
+        <table class="grid">
+          <thead><tr><th>Token</th><th>Mode</th><th>Cost</th><th>Value</th><th>P&amp;L</th><th>SL/TP</th><th>Held</th><th></th></tr></thead>
+          <tbody id="posBody"><tr><td colspan="8">No bags held. Yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="statusbar"><div id="stBrain">brain: ?</div><div id="stTick">tick: -</div><div id="stErr">errors: none</div></div>
+  </div>
+
+  <!-- THOUGHTS -->
+  <div class="window raised cursed" id="w-thoughts" style="left:690px; top:10px; width:420px; height:520px">
+    <div class="titlebar"><span>🧠</span><span class="t">GROQ_THOUGHTS.TXT - Notepad</span></div>
+    <div class="menubar"><span><u>F</u>ile</span><span><u>E</u>dit</span><span><u>S</u>earch</span><label style="margin-left:auto"><input type="checkbox" id="hideSkips"> hide filtered</label></div>
+    <div class="wbody sunken" style="padding:0"><div class="notepad" id="thoughts"></div></div>
+  </div>
+
+  <!-- TRADES -->
+  <div class="window raised hidden" id="w-trades" style="left:140px; top:60px; width:720px; height:380px">
+    <div class="titlebar"><span>📜</span><span class="t">TRADES.LOG</span></div>
+    <div class="wbody"><div class="sunken" style="height:100%; overflow:auto">
+      <table class="grid">
+        <thead><tr><th>#</th><th>Closed</th><th>Mode</th><th>Token</th><th>Cost</th><th>P&amp;L</th><th>%</th><th>Exit reason</th><th>Tx</th></tr></thead>
+        <tbody id="tradesBody"></tbody>
+      </table>
+    </div></div>
+  </div>
+
+  <!-- BRAIN -->
+  <div class="window raised hidden" id="w-brain" style="left:180px; top:30px; width:760px; height:520px">
+    <div class="titlebar"><span>🎓</span><span class="t">C:\BRAIN.EXE - What The Bot Learned</span></div>
+    <div class="wbody">
+      <div class="tabs">
+        <div class="tab active" data-tab="t-lessons">📝 Lessons</div>
+        <div class="tab" data-tab="t-stats">📊 Bucket Stats</div>
+        <div class="tab" data-tab="t-charts">📈 Charts</div>
+        <div class="tab" data-tab="t-ask">📎 Ask Clippy-Groq</div>
+      </div>
+      <div class="raised" style="height:calc(100% - 26px); overflow:auto">
+        <div class="tabpanel" id="t-lessons">
+          <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap">
+            <input type="text" id="lessonQ" placeholder="search lessons / tags / token" style="flex:1; min-width:140px">
+            <select id="lessonSort"><option value="newest">newest</option><option value="cited">most cited</option></select>
+            <button class="btn" id="lessonGo">Search</button>
+          </div>
+          <div id="overallBox" class="sunken lcd" style="margin-bottom:8px"></div>
+          <div id="lessonList"></div>
+        </div>
+        <div class="tabpanel hidden" id="t-stats">
+          <p class="muted">Win/loss per feature bucket. These numbers are fed into every future Groq decision.</p>
+          <table class="grid"><thead><tr><th>Bucket</th><th>N</th><th>W</th><th>L</th><th>Win rate</th><th>Avg P&amp;L</th><th>Vibe bar</th></tr></thead><tbody id="statsBody"></tbody></table>
+        </div>
+        <div class="tabpanel hidden" id="t-charts">
+          <div style="height:220px"><canvas id="eqChart"></canvas></div>
+          <div style="height:200px; margin-top:8px"><canvas id="pnlChart"></canvas></div>
+        </div>
+        <div class="tabpanel hidden" id="t-ask">
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <div style="font-size:48px" class="wobble">📎</div>
+            <div style="flex:1">
+              <p>It looks like you're trying to understand your bot! Ask me anything about what it learned.</p>
+              <textarea id="askQ" rows="3" style="width:100%" placeholder="e.g. What kind of coins keep losing me money?"></textarea>
+              <div style="margin-top:6px"><button class="btn" id="askGo">Ask</button></div>
+              <div id="askA" class="sunken" style="margin-top:8px; padding:8px; min-height:80px; white-space:pre-wrap"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="window raised hidden" id="w-settings" style="left:220px; top:40px; width:520px; height:520px">
+    <div class="titlebar"><span>⚙️</span><span class="t">SETTINGS.INI</span></div>
+    <div class="wbody">
+      <fieldset><legend>💵 Paper account</legend>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+          Starting credit $ <input type="number" id="paperCredit" min="1" step="any" value="1000" style="width:110px">
+          <label><input type="checkbox" id="wipeBrain"> also wipe the brain</label>
+          <button class="btn" id="paperReset">Reset paper</button>
+        </div>
+        <div class="muted">Resetting keeps lessons unless you tick the box. Open paper bags are discarded.</div>
+      </fieldset>
+      <fieldset><legend>🔧 [engine]</legend><div class="ini" id="iniForm"></div></fieldset>
+      <div style="text-align:right"><button class="btn" id="saveSettings">Save</button></div>
+    </div>
+  </div>
+
+  <!-- LIVE -->
+  <div class="window raised hidden" id="w-live" style="left:260px; top:60px; width:500px; height:500px">
+    <div class="titlebar"><span>☢️</span><span class="t">LIVE_MODE.BAT</span></div>
+    <div class="wbody">
+      <div style="display:flex; gap:14px; align-items:center">
+        <div class="bigswitch locked" id="liveSwitch"><div class="knob">PAPER</div></div>
+        <div>
+          <div style="font-weight:bold; font-size:16px">REAL MONEY SWITCH</div>
+          <div class="muted">Flipping this trades your real wallet via Jupiter. Burner wallet only. You can lose everything.</div>
+          <div id="dryRunNote"></div>
+        </div>
+      </div>
+      <hr class="hr95">
+      <b>Pre-flight checklist</b>
+      <ul id="liveReasons" style="margin:4px 0 8px; padding-left:20px"></ul>
+      <b>Paper report card</b>
+      <div id="paperCard" class="sunken lcd" style="margin:4px 0 8px"></div>
+      <div id="liveWallet" class="muted"></div>
+      <hr class="hr95">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn danger" id="killBtn">⏻ It is now safe to turn off your computer</button>
+        <label style="align-self:center"><input type="checkbox" id="killLiquidate"> also market-sell every open bag</label>
+      </div>
+    </div>
+  </div>
+
+  <div id="clippy" title="Clippy-Groq">
+    <div class="bubble hidden" id="clippyBubble"></div>
+    <svg width="54" height="90" viewBox="0 0 54 90" aria-hidden="true">
+      <path d="M18 85 V20 a9 9 0 0 1 18 0 V70 a6 6 0 0 1 -12 0 V28" fill="none" stroke="#8a8a8a" stroke-width="5" stroke-linecap="round"/>
+      <path d="M18 85 V20 a9 9 0 0 1 18 0 V70 a6 6 0 0 1 -12 0 V28" fill="none" stroke="#d9d9d9" stroke-width="2" stroke-linecap="round"/>
+      <ellipse cx="20" cy="30" rx="8" ry="9" fill="#fff" stroke="#000"/><ellipse cx="38" cy="30" rx="8" ry="9" fill="#fff" stroke="#000"/>
+      <circle id="eyeL" cx="22" cy="32" r="3.5"/><circle id="eyeR" cx="40" cy="32" r="3.5"/>
+      <path d="M12 18 l10 3 M46 18 l-10 3" stroke="#000" stroke-width="2"/>
+    </svg>
+  </div>
+</div>
+
+<div id="startmenu" class="raised hidden">
+  <div class="side">VibeTrader<b>95</b></div>
+  <div class="items">
+    <div class="item" data-act="start">▶️ Start Engine</div>
+    <div class="item" data-act="stop">⏹️ Stop Engine</div>
+    <div class="sep"></div>
+    <div class="item" data-open="w-portfolio">💰 Portfolio</div>
+    <div class="item" data-open="w-thoughts">🧠 Groq Thoughts</div>
+    <div class="item" data-open="w-trades">📜 Trades</div>
+    <div class="item" data-open="w-brain">🎓 Brain</div>
+    <div class="item" data-open="w-settings">⚙️ Settings</div>
+    <div class="item" data-open="w-live">☢️ Live Mode</div>
+    <div class="sep"></div>
+    <div class="item" data-act="bsod">💀 Test BSOD</div>
+    <div class="item" data-act="kill">⏻ Shut Down...</div>
+  </div>
+</div>
+
+<div id="taskbar" class="raised">
+  <button class="btn" id="startbtn"><span>🪟</span>Start</button>
+  <div id="tasks"></div>
+  <div id="tray" class="sunken" style="background:var(--face)">
+    <span class="hits" title="visitors">👁 <span id="hits">000000</span></span>
+    <span id="trayMode">📄</span>
+    <span id="clock">12:00 PM</span>
+  </div>
+</div>
+
+<div id="bsod" class="hidden">
+  <div>
+    <div class="hdr">VibeTrader</div>
+    <p>A fatal exception 0xRUGPULL has occurred at 0028:C0FFEE in VXD HOPIUM(01) + 000069.
+      The current bag will be terminated.</p>
+    <p id="bsodMsg"></p>
+    <p>*  Press any key to cope.<br>*  Press CTRL+ALT+DEL to reconsider your life choices.</p>
+    <p style="text-align:center">Press any key to continue <span class="blink">_</span></p>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
