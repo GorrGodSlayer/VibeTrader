@@ -118,14 +118,17 @@ class LiveBroker:
         spent = lamports / 1e9 * sol_px
         return Fill(qty=qty, price=spent / qty if qty else price, usd=spent, tx=sig, raw_amount=str(raw_out), decimals=decimals)
 
-    async def sell(self, trade: dict[str, Any], price: float, liquidity_usd: float) -> Fill:
+    async def sell(self, trade: dict[str, Any], price: float, liquidity_usd: float, qty: float | None = None) -> Fill:
+        """Sell `qty` tokens (default: the whole position)."""
         raw = int(trade.get("raw_amount") or 0)
+        if qty is not None and trade.get("qty"):
+            raw = int(raw * min(1.0, qty / float(trade["qty"])))
         decimals = trade.get("decimals")
         if decimals is None:
             decimals = await self.jup.token_decimals(trade["mint"])
         if not self.dry_run:
             held = await self.token_balance_raw(trade["mint"])
-            raw = min(raw, held) if raw else held
+            raw = min(raw, held) if raw or qty is not None else held
         if raw <= 0:
             raise RuntimeError(f"no {trade['symbol']} balance to sell")
         quote = await self.jup.quote(trade["mint"], SOL_MINT, raw, self.slippage_bps())

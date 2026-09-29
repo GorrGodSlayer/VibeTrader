@@ -3,212 +3,254 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VibeTrader 95</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
-<link rel="stylesheet" href="/static/win95.css">
+<title>VibeTrader</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23e0a526'/><path d='M4 11l3-4 2 2 3-4' stroke='%231a1405' stroke-width='1.6' fill='none'/></svg>">
+<link rel="stylesheet" href="/static/styles.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
-<div id="ticker"><span class="inner" id="tickerText">*** WELCOME TO VIBETRADER 95 *** NOT FINANCIAL ADVICE *** NUMBER GO UP *** </span></div>
-
-<div id="desktop">
-  <div class="icons">
-    <div class="icon" data-open="w-portfolio"><div class="glyph">💰</div><span>PORTFOLIO.EXE</span></div>
-    <div class="icon" data-open="w-thoughts"><div class="glyph">🧠</div><span>GROQ_THOUGHTS.TXT</span></div>
-    <div class="icon" data-open="w-trades"><div class="glyph">📜</div><span>TRADES.LOG</span></div>
-    <div class="icon" data-open="w-brain"><div class="glyph">🎓</div><span>BRAIN.EXE</span></div>
-    <div class="icon" data-open="w-settings"><div class="glyph">⚙️</div><span>SETTINGS.INI</span></div>
-    <div class="icon" data-open="w-live"><div class="glyph">☢️</div><span>LIVE_MODE.BAT</span></div>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12l4-5 3 3 5-6" stroke="#1a1405" stroke-width="2" fill="none"/></svg></span>
+    VibeTrader
   </div>
-  <div class="watermark">VibeTrader 95<small>Memecoin Edition &middot; Build 420.69</small></div>
+  <nav class="tabs" aria-label="Views">
+    <a href="#desk" data-view="desk">Desk</a>
+    <a href="#brain" data-view="brain">Brain</a>
+    <a href="#settings" data-view="settings">Settings</a>
+    <a href="#live" data-view="live">Live</a>
+  </nav>
+  <div class="right">
+    <span class="pill" id="autoPill" title="The AI screens, trades, manages positions and tunes its own strategy">AUTONOMOUS</span>
+    <span class="pill" id="modePill">PAPER</span>
+    <span class="engine"><span class="dot" id="engineDot"></span><span id="engineText">Stopped</span></span>
+    <button class="primary" id="btnEngine">Start</button>
+  </div>
+</header>
 
-  <!-- PORTFOLIO -->
-  <div class="window raised" id="w-portfolio" style="left:110px; top:10px; width:560px; height:390px">
-    <div class="titlebar"><span>💰</span><span class="t">C:\VIBE\PORTFOLIO.EXE</span></div>
-    <div class="menubar"><span><u>F</u>ile</span><span><u>E</u>dit</span><span><u>M</u>oney</span><span><u>H</u>elp me</span></div>
-    <div class="wbody">
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-        <div class="sunken lcd" style="flex:1; min-width:200px">
-          <div id="modeBadge" class="blink">PAPER MODE</div>
-          <div>EQUITY: <b id="eqVal">$0.00</b></div>
-          <div>CASH: <span id="cashVal">$0.00</span></div>
-        </div>
-        <div style="text-align:center; min-width:150px">
-          <div id="pnlBig" class="bigmoney win">+$0.00</div>
-          <div id="pnlPct">+0.00%</div>
-        </div>
-      </div>
-      <div style="margin:8px 0; display:flex; gap:6px; flex-wrap:wrap">
-        <button class="btn go" id="btnStart">▶ START</button>
-        <button class="btn" id="btnStop">■ STOP</button>
-        <span id="engineState" style="align-self:center"></span>
-      </div>
-      <div class="sunken" style="height:170px; overflow:auto">
-        <table class="grid">
-          <thead><tr><th>Token</th><th>Mode</th><th>Cost</th><th>Value</th><th>P&amp;L</th><th>SL/TP</th><th>Held</th><th></th></tr></thead>
-          <tbody id="posBody"><tr><td colspan="8">No bags held. Yet.</td></tr></tbody>
+<section class="kpis" aria-label="Account summary">
+  <div class="kpi"><div class="label">Equity</div><div class="value" id="kEquity">—</div><div class="sub" id="kEquitySub">&nbsp;</div></div>
+  <div class="kpi"><div class="label">P&amp;L</div><div class="value" id="kPnl">—</div><div class="sub" id="kPnlSub">&nbsp;</div></div>
+  <div class="kpi"><div class="label">Cash</div><div class="value" id="kCash">—</div><div class="sub" id="kCashSub">&nbsp;</div></div>
+  <div class="kpi"><div class="label">Open</div><div class="value" id="kOpen">—</div><div class="sub" id="kOpenSub">&nbsp;</div></div>
+  <div class="kpi"><div class="label">Win rate</div><div class="value" id="kWin">—</div><div class="sub" id="kWinSub">&nbsp;</div></div>
+  <div class="kpi"><div class="label">Expectancy</div><div class="value" id="kExp">—</div><div class="sub" id="kExpSub">per trade</div></div>
+  <div class="kpi"><div class="label">Lessons</div><div class="value" id="kLessons">—</div><div class="sub">in memory</div></div>
+  <div class="kpi"><div class="label">Groq budget</div><div class="value" id="kModel">—</div><div class="sub" id="kModelSub">&nbsp;</div></div>
+</section>
+
+<main>
+  <!-- DESK -->
+  <div class="view view-desk" id="view-desk">
+    <section class="panel">
+      <div class="panel-head"><h2>Positions</h2><span class="count" id="posCount"></span></div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Token</th><th>Mode</th><th class="num">Cost</th><th class="num">Value</th><th class="num">P&amp;L</th><th class="num">Stop / Target</th><th class="num">Held</th><th></th></tr></thead>
+          <tbody id="posBody"></tbody>
         </table>
+        <div class="empty" id="posEmpty">No open positions</div>
       </div>
-    </div>
-    <div class="statusbar"><div id="stBrain">brain: ?</div><div id="stTick">tick: -</div><div id="stErr">errors: none</div></div>
-  </div>
-
-  <!-- THOUGHTS -->
-  <div class="window raised cursed" id="w-thoughts" style="left:690px; top:10px; width:420px; height:520px">
-    <div class="titlebar"><span>🧠</span><span class="t">GROQ_THOUGHTS.TXT - Notepad</span></div>
-    <div class="menubar"><span><u>F</u>ile</span><span><u>E</u>dit</span><span><u>S</u>earch</span><label style="margin-left:auto"><input type="checkbox" id="hideSkips"> hide filtered</label></div>
-    <div class="wbody sunken" style="padding:0"><div class="notepad" id="thoughts"></div></div>
-  </div>
-
-  <!-- TRADES -->
-  <div class="window raised hidden" id="w-trades" style="left:140px; top:60px; width:720px; height:380px">
-    <div class="titlebar"><span>📜</span><span class="t">TRADES.LOG</span></div>
-    <div class="wbody"><div class="sunken" style="height:100%; overflow:auto">
-      <table class="grid">
-        <thead><tr><th>#</th><th>Closed</th><th>Mode</th><th>Token</th><th>Cost</th><th>P&amp;L</th><th>%</th><th>Exit reason</th><th>Tx</th></tr></thead>
-        <tbody id="tradesBody"></tbody>
-      </table>
-    </div></div>
+    </section>
+    <section class="panel feed" id="feed">
+      <div class="panel-head">
+        <h2>Activity</h2>
+        <div class="tools"><label class="inline"><input type="checkbox" id="hideNoise" checked> Hide filtered &amp; system</label></div>
+      </div>
+      <div class="panel-body" id="feedBody"><div class="empty" id="feedEmpty">Waiting for the first scan</div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Closed trades</h2><span class="count" id="tradeCount"></span></div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Closed</th><th>Token</th><th>Mode</th><th class="num">Cost</th><th class="num">P&amp;L</th><th class="num">%</th><th>Exit</th><th>Tx</th></tr></thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
+        <div class="empty" id="tradesEmpty">No closed trades yet</div>
+      </div>
+    </section>
   </div>
 
   <!-- BRAIN -->
-  <div class="window raised hidden" id="w-brain" style="left:180px; top:30px; width:760px; height:520px">
-    <div class="titlebar"><span>🎓</span><span class="t">C:\BRAIN.EXE - What The Bot Learned</span></div>
-    <div class="wbody">
-      <div class="tabs">
-        <div class="tab active" data-tab="t-lessons">📝 Lessons</div>
-        <div class="tab" data-tab="t-stats">📊 Bucket Stats</div>
-        <div class="tab" data-tab="t-charts">📈 Charts</div>
-        <div class="tab" data-tab="t-ask">📎 Ask Clippy-Groq</div>
-      </div>
-      <div class="raised" style="height:calc(100% - 26px); overflow:auto">
-        <div class="tabpanel" id="t-lessons">
-          <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap">
-            <input type="text" id="lessonQ" placeholder="search lessons / tags / token" style="flex:1; min-width:140px">
-            <select id="lessonSort"><option value="newest">newest</option><option value="cited">most cited</option></select>
-            <button class="btn" id="lessonGo">Search</button>
-          </div>
-          <div id="overallBox" class="sunken lcd" style="margin-bottom:8px"></div>
-          <div id="lessonList"></div>
-        </div>
-        <div class="tabpanel hidden" id="t-stats">
-          <p class="muted">Win/loss per feature bucket. These numbers are fed into every future Groq decision.</p>
-          <table class="grid"><thead><tr><th>Bucket</th><th>N</th><th>W</th><th>L</th><th>Win rate</th><th>Avg P&amp;L</th><th>Vibe bar</th></tr></thead><tbody id="statsBody"></tbody></table>
-        </div>
-        <div class="tabpanel hidden" id="t-charts">
-          <div style="height:220px"><canvas id="eqChart"></canvas></div>
-          <div style="height:200px; margin-top:8px"><canvas id="pnlChart"></canvas></div>
-        </div>
-        <div class="tabpanel hidden" id="t-ask">
-          <div style="display:flex; gap:10px; align-items:flex-start">
-            <div style="font-size:48px" class="wobble">📎</div>
-            <div style="flex:1">
-              <p>It looks like you're trying to understand your bot! Ask me anything about what it learned.</p>
-              <textarea id="askQ" rows="3" style="width:100%" placeholder="e.g. What kind of coins keep losing me money?"></textarea>
-              <div style="margin-top:6px"><button class="btn" id="askGo">Ask</button></div>
-              <div id="askA" class="sunken" style="margin-top:8px; padding:8px; min-height:80px; white-space:pre-wrap"></div>
-            </div>
-          </div>
+  <div class="view view-brain hidden" id="view-brain">
+    <section class="panel connectome">
+      <div class="panel-head">
+        <h2>Concept brain</h2><span class="count" id="brainHud"></span>
+        <div class="tools legend">
+          <span><i style="background:var(--up)"></i>winning lesson / concept</span>
+          <span><i style="background:var(--down)"></i>losing</span>
+          <span><i style="background:#7f93b5"></i>synapse</span>
+          <span><i style="background:var(--accent)"></i>first synapse between two concepts</span>
+          <span><i style="background:#5b8cff"></i>playbook (base knowledge)</span>
+          <button class="ghost" id="brainReplay" title="Re-grow the brain in the order it learned">Replay</button>
         </div>
       </div>
+      <div class="connectome-body">
+        <div class="brain-3d" id="brain3d">
+          <div class="brain-callout" id="brainCallout" aria-live="polite"></div>
+          <div class="brain-tip hidden" id="brainTip"></div>
+          <div class="brain-fallback hidden" id="brainFallback">3D view unavailable (WebGL disabled or offline).</div>
+        </div>
+        <aside class="conn-log">
+          <div class="conn-log-head"><span>Learning log</span><span class="count" id="connLogCount"></span></div>
+          <div class="conn-log-body" id="connLog"><div class="empty">Concepts and synapses appear as lessons are learned</div></div>
+        </aside>
+      </div>
+    </section>
+    <div class="brain-grid">
+      <section class="panel lessons-panel">
+        <div class="panel-head">
+          <h2>Lessons</h2><span class="count" id="lessonCount"></span><span id="lessonFilter"></span>
+          <div class="tools">
+            <input type="search" id="lessonQ" placeholder="Search lessons, tags, tokens" aria-label="Search lessons" style="width:200px">
+            <select id="lessonSort" aria-label="Sort lessons"><option value="newest">Newest</option><option value="cited">Most cited</option></select>
+          </div>
+        </div>
+        <div class="stat-row" id="brainStats"></div>
+        <div class="panel-body" id="lessonList"></div>
+      </section>
+    <div class="brain-right">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>AI strategist</h2><span class="count" id="stratState"></span>
+          <div class="tools">
+            <button class="ghost hidden" id="stratResume">Lift pause</button>
+            <button class="ghost" id="stratReview" title="Ask the AI to review its strategy now">Review now</button>
+          </div>
+        </div>
+        <div class="panel-body" id="stratJournal" style="max-height:340px">
+          <div class="empty">The AI reviews its own strategy every few closed trades and logs each change here.</div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Playbook</h2><span class="count" id="pbCount">base knowledge the trader starts with</span></div>
+        <div class="panel-body" id="playbook" style="max-height:360px"><div class="empty">Loading…</div></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Equity</h2><span class="count" id="eqMode"></span></div>
+        <div class="chart-box"><canvas id="eqChart" aria-label="Equity over time"></canvas></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>P&amp;L per trade</h2><span class="count">last 100</span></div>
+        <div class="chart-box"><canvas id="pnlChart" aria-label="Profit and loss per trade"></canvas></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Feature buckets</h2><span class="count">fed into every decision</span></div>
+        <div class="panel-body" style="max-height:320px">
+          <table>
+            <thead><tr><th>Bucket</th><th class="num">N</th><th class="num">W / L</th><th>Win rate</th><th class="num">Avg P&amp;L</th></tr></thead>
+            <tbody id="statsBody"></tbody>
+          </table>
+          <div class="empty" id="statsEmpty">No closed trades to learn from yet</div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Ask the model</h2></div>
+        <div class="panel-body pad">
+          <textarea id="askQ" rows="2" placeholder="e.g. Which setups have lost the most money?" aria-label="Question"></textarea>
+          <div class="ask-foot">
+            <span class="clip" title="It looks like you're trying to understand your bot. Would you like help?">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </span>
+            <button id="askGo">Ask</button>
+          </div>
+          <div class="ask-answer hidden" id="askA"></div>
+        </div>
+      </section>
+    </div>
     </div>
   </div>
 
   <!-- SETTINGS -->
-  <div class="window raised hidden" id="w-settings" style="left:220px; top:40px; width:520px; height:520px">
-    <div class="titlebar"><span>⚙️</span><span class="t">SETTINGS.INI</span></div>
-    <div class="wbody">
-      <fieldset><legend>💵 Paper account</legend>
-        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
-          Starting credit $ <input type="number" id="paperCredit" min="1" step="any" value="1000" style="width:110px">
-          <label><input type="checkbox" id="wipeBrain"> also wipe the brain</label>
-          <button class="btn" id="paperReset">Reset paper</button>
+  <div class="view view-page hidden" id="view-settings">
+    <div class="page">
+      <section class="panel">
+        <div class="panel-head"><h2>Paper account</h2></div>
+        <div class="field">
+          <div><label for="paperCredit">Starting balance (USD)</label></div>
+          <input type="number" id="paperCredit" min="1" step="any" value="1000">
+          <div class="hint">Resetting discards open paper positions and restores this balance. Lessons are kept unless you clear them.</div>
         </div>
-        <div class="muted">Resetting keeps lessons unless you tick the box. Open paper bags are discarded.</div>
-      </fieldset>
-      <fieldset><legend>🔧 [engine]</legend><div class="ini" id="iniForm"></div></fieldset>
-      <div style="text-align:right"><button class="btn" id="saveSettings">Save</button></div>
+        <div class="actions">
+          <label class="inline"><input type="checkbox" id="wipeBrain"> Also clear lessons and stats</label>
+          <button id="paperReset">Reset paper account</button>
+        </div>
+      </section>
+      <div class="form-grid" id="settingsForm"></div>
+      <div class="actions" style="padding:0">
+        <span class="muted" id="settingsNote"></span>
+        <button id="settingsRevert">Revert</button>
+        <button class="primary" id="settingsSave">Save settings</button>
+      </div>
     </div>
   </div>
 
   <!-- LIVE -->
-  <div class="window raised hidden" id="w-live" style="left:260px; top:60px; width:500px; height:500px">
-    <div class="titlebar"><span>☢️</span><span class="t">LIVE_MODE.BAT</span></div>
-    <div class="wbody">
-      <div style="display:flex; gap:14px; align-items:center">
-        <div class="bigswitch locked" id="liveSwitch"><div class="knob">PAPER</div></div>
-        <div>
-          <div style="font-weight:bold; font-size:16px">REAL MONEY SWITCH</div>
-          <div class="muted">Flipping this trades your real wallet via Jupiter. Burner wallet only. You can lose everything.</div>
-          <div id="dryRunNote"></div>
+  <div class="view view-page hidden" id="view-live">
+    <div class="page">
+      <section class="panel">
+        <div class="panel-head"><h2>Trading mode</h2></div>
+        <div class="mode-row">
+          <span class="pill" id="liveModePill">PAPER</span>
+          <div class="desc" id="liveModeDesc"></div>
+          <button class="danger" id="btnGoLive">Enable live trading</button>
+          <button class="hidden" id="btnGoPaper">Return to paper</button>
         </div>
-      </div>
-      <hr class="hr95">
-      <b>Pre-flight checklist</b>
-      <ul id="liveReasons" style="margin:4px 0 8px; padding-left:20px"></ul>
-      <b>Paper report card</b>
-      <div id="paperCard" class="sunken lcd" style="margin:4px 0 8px"></div>
-      <div id="liveWallet" class="muted"></div>
-      <hr class="hr95">
-      <div style="display:flex; gap:8px; flex-wrap:wrap">
-        <button class="btn danger" id="killBtn">⏻ It is now safe to turn off your computer</button>
-        <label style="align-self:center"><input type="checkbox" id="killLiquidate"> also market-sell every open bag</label>
-      </div>
+        <div class="notice" id="dryRunNote"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Pre-flight checks</h2></div>
+        <ul class="check-list" id="liveChecks"></ul>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Paper track record</h2></div>
+        <div class="kv" id="paperRecord"></div>
+        <div class="notice hidden" id="paperWarn"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Live wallet</h2></div>
+        <div class="panel-body pad muted mono" id="liveWallet">Not connected</div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Emergency stop</h2></div>
+        <div class="mode-row">
+          <div class="desc">Stops the engine immediately. Optionally sells every open position at market.</div>
+          <label class="inline"><input type="checkbox" id="killLiquidate"> Sell all positions</label>
+          <button class="danger" id="killBtn">Stop everything</button>
+        </div>
+      </section>
     </div>
   </div>
+</main>
 
-  <div id="clippy" title="Clippy-Groq">
-    <div class="bubble hidden" id="clippyBubble"></div>
-    <svg width="54" height="90" viewBox="0 0 54 90" aria-hidden="true">
-      <path d="M18 85 V20 a9 9 0 0 1 18 0 V70 a6 6 0 0 1 -12 0 V28" fill="none" stroke="#8a8a8a" stroke-width="5" stroke-linecap="round"/>
-      <path d="M18 85 V20 a9 9 0 0 1 18 0 V70 a6 6 0 0 1 -12 0 V28" fill="none" stroke="#d9d9d9" stroke-width="2" stroke-linecap="round"/>
-      <ellipse cx="20" cy="30" rx="8" ry="9" fill="#fff" stroke="#000"/><ellipse cx="38" cy="30" rx="8" ry="9" fill="#fff" stroke="#000"/>
-      <circle id="eyeL" cx="22" cy="32" r="3.5"/><circle id="eyeR" cx="40" cy="32" r="3.5"/>
-      <path d="M12 18 l10 3 M46 18 l-10 3" stroke="#000" stroke-width="2"/>
-    </svg>
-  </div>
-</div>
+<footer class="statusbar">
+  <span id="sbTick">tick —</span>
+  <span id="sbConn" class="hide-sm">connecting…</span>
+  <span id="sbErr" class="err"></span>
+  <span class="right hide-sm">Not financial advice</span>
+</footer>
 
-<div id="startmenu" class="raised hidden">
-  <div class="side">VibeTrader<b>95</b></div>
-  <div class="items">
-    <div class="item" data-act="start">▶️ Start Engine</div>
-    <div class="item" data-act="stop">⏹️ Stop Engine</div>
-    <div class="sep"></div>
-    <div class="item" data-open="w-portfolio">💰 Portfolio</div>
-    <div class="item" data-open="w-thoughts">🧠 Groq Thoughts</div>
-    <div class="item" data-open="w-trades">📜 Trades</div>
-    <div class="item" data-open="w-brain">🎓 Brain</div>
-    <div class="item" data-open="w-settings">⚙️ Settings</div>
-    <div class="item" data-open="w-live">☢️ Live Mode</div>
-    <div class="sep"></div>
-    <div class="item" data-act="bsod">💀 Test BSOD</div>
-    <div class="item" data-act="kill">⏻ Shut Down...</div>
-  </div>
-</div>
+<div id="toasts" aria-live="polite"></div>
 
-<div id="taskbar" class="raised">
-  <button class="btn" id="startbtn"><span>🪟</span>Start</button>
-  <div id="tasks"></div>
-  <div id="tray" class="sunken" style="background:var(--face)">
-    <span class="hits" title="visitors">👁 <span id="hits">000000</span></span>
-    <span id="trayMode">📄</span>
-    <span id="clock">12:00 PM</span>
-  </div>
-</div>
-
-<div id="bsod" class="hidden">
-  <div>
-    <div class="hdr">VibeTrader</div>
-    <p>A fatal exception 0xRUGPULL has occurred at 0028:C0FFEE in VXD HOPIUM(01) + 000069.
-      The current bag will be terminated.</p>
-    <p id="bsodMsg"></p>
-    <p>*  Press any key to cope.<br>*  Press CTRL+ALT+DEL to reconsider your life choices.</p>
-    <p style="text-align:center">Press any key to continue <span class="blink">_</span></p>
-  </div>
-</div>
+<dialog id="modal">
+  <form method="dialog">
+    <h3 id="mTitle"></h3>
+    <div class="dbody"><div id="mBody"></div><input id="mInput" class="hidden" autocomplete="off"></div>
+    <div class="dactions">
+      <button value="cancel" id="mCancel" formnovalidate>Cancel</button>
+      <button value="ok" id="mOk" class="primary">OK</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="/static/app.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="/static/brain3d.js"></script>
 </body>
 </html>

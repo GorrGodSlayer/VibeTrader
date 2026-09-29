@@ -1,0 +1,1232 @@
+{
+ "about": "Base trading knowledge for VibeTrader, researched 2026-09-29 from trading guides, on-chain analytics and security write-ups, and academic studies of pump.fun launches. Every rule cites the pages it came from. Numbers marked low/medium confidence are practitioner heuristics; the bot's own lessons override them once it has enough trades.",
+ "notes": "SOURCES DISAGREE ON: (1) Top-10 holder threshold: Solana Tracker flags >15%, Bubblemaps puts 15-30% as elevated and >30% as high, DeFade 30-40%, CreateMyCoin only >80%. We use 15% warn / 30% reject. (2) Scaling out: systematic trend-following tests (Enlightened Stock Trading, ASX, 25% trail) found every partial-profit variant lowered returns and none improved MAR, and traderssecondbrain says trailing is the only way to capture fat tails. Every memecoin source recommends laddered exits instead. We side with laddering because memecoin return paths are dominated by fast collapses (MemeTrans: 60% of migrated tokens lost 80%+ within 20 minutes), which is unlike stock trend-following. Validate with the bot's own MFE/MAE logs. (3) Breakeven stops: Dave Mabe found no breakeven variant improved profitability; Trading Heroes says it suits longer timeframes and psychology. We move to breakeven only after the first take-profit fills, not on a small wiggle. (4) Time stops: sources range from 6-12h (Altrady pump.fun) to 24-48h (Fomo). Our 60-90 minute window for young tokens is our own heuristic, based on launch-day mortality and the bot's polling cadence, and should be backtested. (5) Lifespan stats vary by definition: CoinGecko (last bonding-curve trade: 68.7% die on day 0, which undercounts graduated tokens) vs Chainplay (volume-based 'defunct' definition: avg 12 days, 15% die on day 1). (6) Graduation rate: ~1.4% historical (Dune/Odaily), under 2% (Solana Compass), ~0.26% mid-2026 (DEXTools headline; that page returned 404 so it is unverified), and one day with over 1% (Cryptopolitan search snippet). Pump.fun disputes Solidus's '98.6% fraud' framing but not its data. CAVEATS: Many numeric exit thresholds (TP levels, trail %, time stops, sell/buy ratio 1.5, volume decay 30%, liq/mcap 10%) are practitioner heuristics, not measured optima, and are marked medium or low confidence. Several influential memecoin guides (Medium/FXM) returned 403 and were not used as sources. The time-of-day rule rests on one low-quality blog. BOT DESIGN IMPLICATIONS: The bot polls every few minutes, so gaps through stops are the norm in thin pools. Enforce stops and take-profits in code on every tick, not only via the LLM, size positions assuming about 10% extra slippage on stops, and never rely on the LLM remembering the peak price. Persist peak_price/MFE per position so trailing, profit-floor and round-trip rules work. DexScreener 'liquidity' counts both sides of the pool, so the SOL-side reserve is about half. Pump.fun graduated pools have protocol-owned LP, so RugCheck 'LP unlocked' flags may not apply to them; check the pool program. Paper P&L must include ~1-3% per side in costs for memecoins or it will overstate edge. Majors (JUP/BONK/WIF) need different rules: ATR stops, longer holds, holder-concentration checks relaxed.",
+ "rules": [
+  {
+   "id": "reject-active-mint-authority",
+   "category": "rug_detection",
+   "rule": "Reject any token whose mint authority is not revoked; the holder of that key can print unlimited supply and dump it on you.",
+   "rationale": "Every checklist reviewed treats a live mint authority as a hard fail; Solana Tracker's risk engine lists it as a danger-level factor. Legitimate memecoins (incl. all pump.fun launches) renounce it at creation.",
+   "applies_to": [
+    "rug:danger",
+    "rug:warn"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://defade.org/blog/how-to-spot-solana-rug-pull",
+    "https://docs.solanatracker.io/guides/token-safety"
+   ]
+  },
+  {
+   "id": "reject-active-freeze-authority",
+   "category": "rug_detection",
+   "rule": "Reject tokens with an active freeze authority; the issuer can freeze your token account so you can never sell.",
+   "rationale": "An arXiv study of 100,063 new Solana tokens (H1 2025) identified Freeze Authority Abuse as one of three dominant rug patterns and labelled 76,469 of them rug pulls. Solana Tracker flags active freeze authority as danger-level.",
+   "applies_to": [
+    "rug:danger",
+    "rug:warn"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://arxiv.org/abs/2603.24625",
+    "https://docs.solanatracker.io/guides/token-safety"
+   ]
+  },
+  {
+   "id": "require-burned-or-protocol-lp",
+   "category": "rug_detection",
+   "rule": "Require LP burned or protocol-owned; treat unlocked LP as rug-ready, and accept a time-lock only if it outlasts your planned hold.",
+   "rationale": "Chainalysis found ~94% of suspected pump-and-dump DEX pools were rugged by the pool creator, with median time to abandonment of 0 days (90th pct 8 days). Pump.fun graduated pools are protocol-owned and not removable.",
+   "applies_to": [
+    "rug:danger",
+    "rug:warn",
+    "age:<1h",
+    "age:1-6h"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.chainalysis.com/blog/crypto-market-manipulation-wash-trading-pump-and-dump-2025/",
+    "https://pump.fun/docs/bonding-curve",
+    "https://defade.org/blog/how-to-spot-solana-rug-pull"
+   ]
+  },
+  {
+   "id": "top10-holder-concentration",
+   "category": "rug_detection",
+   "rule": "Excluding pool/program addresses, halve size if top-10 holders own over 15% of supply; skip if they own over 30%.",
+   "rationale": "Thresholds disagree: Solana Tracker flags danger above 15%, Bubblemaps calls clusters 15-30% elevated and over 30% high risk, DeFade warns at 30-40%. MemeTrans found high-risk launches had top-10 early buyers holding 17 points more supply.",
+   "applies_to": [
+    "rug:warn",
+    "rug:danger",
+    "age:<1h",
+    "age:1-6h"
+   ],
+   "params": {
+    "top10_warn_pct": 15,
+    "top10_reject_pct": 30
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://docs.solanatracker.io/guides/token-safety",
+    "https://blog.bubblemaps.io/how-to-analyze-meme-coin-holders-with-bubblemaps/",
+    "https://defade.org/blog/how-to-spot-solana-rug-pull",
+    "https://arxiv.org/html/2602.13480v1"
+   ]
+  },
+  {
+   "id": "bundled-supply-limit",
+   "category": "rug_detection",
+   "rule": "Skip tokens where bundled or linked launch wallets still hold over 15% of supply; treat over 30% as a near-certain dump setup.",
+   "rationale": "MemeTrans (pump.fun Dec 2024-Mar 2025) found bundled accounts were 28% of holders but controlled 36.5% of supply. Bubblemaps says bundled supply over 15% at launch shows serious insider coordination.",
+   "applies_to": [
+    "rug:warn",
+    "rug:danger",
+    "age:<1h",
+    "age:1-6h"
+   ],
+   "params": {
+    "bundle_warn_pct": 15,
+    "bundle_reject_pct": 30
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://arxiv.org/html/2602.13480v1",
+    "https://blog.bubblemaps.io/how-to-analyze-meme-coin-holders-with-bubblemaps/",
+    "https://defade.org/blog/how-to-spot-solana-rug-pull"
+   ]
+  },
+  {
+   "id": "creator-wallet-holdings-and-sells",
+   "category": "rug_detection",
+   "rule": "Avoid tokens whose creator wallet holds over 30% of supply or has sold over 20% of its allocation in the first hours.",
+   "rationale": "DeFade lists a dev selling more than 20-30% of its allocation quickly as a pre-exit signal. Altrady flags a creator holding 30%+ with no community as high risk. Both numbers are practitioner heuristics, not measured cutoffs.",
+   "applies_to": [
+    "rug:warn",
+    "rug:danger",
+    "age:<1h",
+    "age:1-6h"
+   ],
+   "params": {
+    "dev_hold_reject_pct": 30,
+    "dev_sold_warn_pct": 20
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://defade.org/blog/how-to-spot-solana-rug-pull",
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading"
+   ]
+  },
+  {
+   "id": "reject-dangerous-token2022-extensions",
+   "category": "rug_detection",
+   "rule": "Reject Token-2022 mints with permanent delegate, transfer hook, non-transferable, pausable or default-frozen account state extensions.",
+   "rationale": "A permanent delegate can move or burn tokens from any wallet without consent. Transfer hooks run arbitrary code that can block sells. Default-frozen state locks tokens until the issuer unfreezes them. Standard SPL memecoins need none of these.",
+   "applies_to": [
+    "rug:danger",
+    "rug:warn"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://solana.com/docs/tokens/extensions",
+    "https://paragraph.com/@quantumaudit/ranking-token-2022-extensions-risk",
+    "https://dev.to/mrwizardlyloaf/token-2022-traps-that-drain-ai-trading-agents-and-how-to-screen-them-33bo"
+   ]
+  },
+  {
+   "id": "reject-transfer-fee-authority",
+   "category": "rug_detection",
+   "rule": "Reject tokens with any Token-2022 transfer fee or live fee authority, even if the current fee is 0%.",
+   "rationale": "An active fee_authority can raise the fee after launch. A 0% token can be switched to 100%, which makes selling pointless. Hidden or asymmetric fees of 50-99% have been reported.",
+   "applies_to": [
+    "rug:danger",
+    "rug:warn"
+   ],
+   "params": {
+    "max_transfer_fee_bps": 0
+   },
+   "confidence": "high",
+   "sources": [
+    "https://paragraph.com/@quantumaudit/ranking-token-2022-extensions-risk",
+    "https://solana.com/docs/tokens/extensions"
+   ]
+  },
+  {
+   "id": "verify-sell-route-before-buy",
+   "category": "rug_detection",
+   "rule": "Before entering, confirm a token-to-SOL sell quote exists at your size with sane price impact; if no sell route, reject.",
+   "rationale": "Honeypots let you buy but not sell. Simulated or quoted sells catch missing routes, transfer-hook blocks and extreme taxes. Detectors are heuristic and can be beaten by later parameter changes.",
+   "applies_to": [
+    "rug:warn",
+    "rug:danger",
+    "liq:<25k"
+   ],
+   "params": {
+    "max_sell_quote_impact_pct": 5
+   },
+   "confidence": "high",
+   "sources": [
+    "https://dev.to/mrwizardlyloaf/how-to-detect-a-solana-honeypot-token-before-your-bot-buys-2cdf",
+    "https://dev.to/mrwizardlyloaf/token-2022-traps-that-drain-ai-trading-agents-and-how-to-screen-them-33bo"
+   ]
+  },
+  {
+   "id": "respect-rugcheck-danger-score",
+   "category": "rug_detection",
+   "rule": "Reject tokens scored 8+/10 risk, flagged 'rugged', or carrying any danger-level factor; treat caution-level scores as reasons to cut size.",
+   "rationale": "Solana Tracker's documented screening logic excludes scores of 8 or higher, any 'rugged' (no liquidity) status and any danger-level factor. Its scale is 1-3 low, 4-6 medium, 7-8 high, 9-10 critical.",
+   "applies_to": [
+    "rug:danger",
+    "rug:warn"
+   ],
+   "params": {
+    "reject_score_gte": 8
+   },
+   "confidence": "high",
+   "sources": [
+    "https://docs.solanatracker.io/guides/token-safety"
+   ]
+  },
+  {
+   "id": "detect-wash-volume",
+   "category": "rug_detection",
+   "rule": "Discount volume when trades per unique maker is very high, trade sizes are uniform, or 24h volume jumps over 10x with no holder growth.",
+   "rationale": "Bitquery: one memecoin showed $532k of volume in 12h from 233 wallets averaging 174 trades each, with 96% on both sides. Uniform trade sizes are a bot signature. The cutoff of ~20 trades per maker is a heuristic.",
+   "applies_to": [
+    "turnover:high",
+    "age:<1h",
+    "age:1-6h"
+   ],
+   "params": {
+    "max_trades_per_maker": 20
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://bitquery.io/blog/solana-volume-numbers-are-a-lie",
+    "https://createmycoin.app/articles/what-is-dexscreener"
+   ]
+  },
+  {
+   "id": "boosts-are-paid-not-safety",
+   "category": "rug_detection",
+   "rule": "Treat DexScreener boosts and trending placement as paid marketing; never count them as evidence of safety or quality.",
+   "rationale": "DexScreener docs: boosts are purchased packs lasting 12-24h that multiply the Trending Score, and can be removed if a token is flagged malicious. Paid Enhanced Token Info also raises trending rank.",
+   "applies_to": [],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://docs.dexscreener.com/boosting",
+    "https://docs.dexscreener.com/trending",
+    "https://createmycoin.app/articles/what-is-dexscreener"
+   ]
+  },
+  {
+   "id": "avoid-serial-deployers",
+   "category": "rug_detection",
+   "rule": "Skip tokens whose deployer or funding wallet has launched other tokens that died within hours or days.",
+   "rationale": "DeFade lists serial short-lived launches as a red flag. In a Chainalysis case study one creator deployed 81 suspicious tokens and earned about $830k.",
+   "applies_to": [
+    "age:<1h",
+    "age:1-6h",
+    "rug:warn"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://defade.org/blog/how-to-spot-solana-rug-pull",
+    "https://www.chainalysis.com/blog/crypto-crime-2024-pump-and-dump/"
+   ]
+  },
+  {
+   "id": "assume-new-launch-is-a-loser",
+   "category": "launch_lifecycle",
+   "rule": "Treat every fresh pump.fun-style launch as a likely zero; require strong evidence before buying anything under one hour old.",
+   "rationale": "Historically ~1.4% of pump.fun tokens graduated (Dune), and DEXTools reported ~0.26% in mid-2026. Solidus Labs found 98.6% show pump-and-dump traits, and only 97k of 7M+ tokens kept over $1k liquidity.",
+   "applies_to": [
+    "age:<1h"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.odaily.news/en/post/5197733",
+    "https://solanacompass.com/news/pumpfun-launched-42000-tokens-in-one-day-fewer-than-2-will-ever-reach-a-dex",
+    "https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance"
+   ]
+  },
+  {
+   "id": "no-buy-right-after-migration",
+   "category": "launch_lifecycle",
+   "rule": "Do not buy a token in its first 20-30 minutes after graduating to PumpSwap/Raydium; wait for the migration dump to settle.",
+   "rationale": "MemeTrans: within 20 minutes of migration, 60% of tokens fell below 20% of the migration price and 73% below 40%. Only 5.2% held at or above it.",
+   "applies_to": [
+    "age:<1h"
+   ],
+   "params": {
+    "post_migration_wait_min": 30
+   },
+   "confidence": "high",
+   "sources": [
+    "https://arxiv.org/html/2602.13480v1",
+    "https://crypto.news/how-meme-coins-are-made-bonding-curves-pump-fun-rug-pulls/"
+   ]
+  },
+  {
+   "id": "sell-into-graduation",
+   "category": "launch_lifecycle",
+   "rule": "If holding a bonding-curve token approaching graduation, sell most of it into the graduation pump rather than holding through migration.",
+   "rationale": "Graduation is when bottom-of-curve buyers realize 10-100x gains and sell into thin new pools. The post-migration collapse numbers above show that holding through it usually loses.",
+   "applies_to": [
+    "age:<1h",
+    "h1:pump",
+    "h1:moon"
+   ],
+   "params": {
+    "sell_fraction_at_graduation": 0.7
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://crypto.news/how-meme-coins-are-made-bonding-curves-pump-fun-rug-pulls/",
+    "https://arxiv.org/html/2602.13480v1",
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading"
+   ]
+  },
+  {
+   "id": "memecoin-momentum-dies-within-a-day",
+   "category": "launch_lifecycle",
+   "rule": "Assume a new memecoin's momentum lasts hours, not days; plan exits for the same session you entered.",
+   "rationale": "CoinGecko (18.7M pump.fun tokens): 68.7% recorded their last trade on launch day and 80.4% by day 1. Only 4.6% traded beyond 90 days, and bonding-curve-only data understates graduated lifespans.",
+   "applies_to": [
+    "age:<1h",
+    "age:1-6h",
+    "age:6-24h"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens",
+    "https://chainplay.gg/blog/lifespan-pump-fun-memecoins-analysis/"
+   ]
+  },
+  {
+   "id": "graduation-is-not-success",
+   "category": "launch_lifecycle",
+   "rule": "Do not hold graduated tokens for moonshots; size targets around 1.5-3x, since million-dollar outcomes are one-in-hundreds even among graduates.",
+   "rationale": "Of ~25,000 graduated tokens, only 96 exceeded $1M market cap and 18 exceeded $10M (Odaily/Dune). Many graduates went to near zero.",
+   "applies_to": [
+    "age:1-6h",
+    "age:6-24h"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://www.odaily.news/en/post/5197733",
+    "https://solanacompass.com/news/pumpfun-launched-42000-tokens-in-one-day-fewer-than-2-will-ever-reach-a-dex"
+   ]
+  },
+  {
+   "id": "early-insiders-have-cost-edge",
+   "category": "launch_lifecycle",
+   "rule": "Expect heavy profit-taking at every milestone (graduation, round market caps, trending listings); insiders' cost basis may be 10-100x below yours.",
+   "rationale": "On the bonding curve, early buyers can pay ~100x less than late buyers for the same token amount. MemeTrans found 98.7% of dev mint transactions included an immediate same-transaction buy.",
+   "applies_to": [
+    "age:<1h",
+    "age:1-6h"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://crypto.news/how-meme-coins-are-made-bonding-curves-pump-fun-rug-pulls/",
+    "https://arxiv.org/html/2602.13480v1"
+   ]
+  },
+  {
+   "id": "prefer-aged-survivors",
+   "category": "launch_lifecycle",
+   "rule": "Prefer tokens that have survived over 24h with steady volume over brand-new launches; age filters out most rugs but not dumps.",
+   "rationale": "About 80% of pump.fun tokens are dead within one day, so a 1-7 day old token with active trading is already a filtered survivor. Chainalysis still puts the 90th percentile of pump-and-dump abandonment at 8 days.",
+   "applies_to": [
+    "age:1-7d",
+    "age:6-24h",
+    "age:<1h"
+   ],
+   "params": {
+    "preferred_min_age_h": 24
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens",
+    "https://www.chainalysis.com/blog/crypto-market-manipulation-wash-trading-pump-and-dump-2025/"
+   ]
+  },
+  {
+   "id": "minimum-liquidity-floor",
+   "category": "entry",
+   "rule": "Do not buy DEX-listed memecoins with under $50k pool liquidity; treat under $25k as untradeable for anything but dust.",
+   "rationale": "Altrady says exits below $30-50k liquidity move price 10-20%. CreateMyCoin calls under $5-10k a rug zone and suggests at least $50k. GMGN wants $100-200k+ market cap for graduated tokens.",
+   "applies_to": [
+    "liq:<25k",
+    "liq:25k-100k"
+   ],
+   "params": {
+    "min_liquidity_usd": 50000,
+    "hard_floor_liquidity_usd": 25000
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading",
+    "https://createmycoin.app/articles/what-is-dexscreener",
+    "https://docs.gmgn.ai/index/gmgn-meme-trading-guide"
+   ]
+  },
+  {
+   "id": "size-vs-pool-price-impact",
+   "category": "entry",
+   "rule": "Keep each position at 1% or less of reported pool liquidity, so entry and exit price impact each stay around 2% or below.",
+   "rationale": "In a constant-product pool, price impact is roughly trade/(reserve+trade); a 25%-of-reserve trade loses 20% of output (RareSkills). DexScreener liquidity counts both sides, so 1% of it is ~2% of the SOL reserve. Altrady wants full exits within 2% impact.",
+   "applies_to": [
+    "liq:<25k",
+    "liq:25k-100k",
+    "liq:100k-500k"
+   ],
+   "params": {
+    "max_position_pct_of_liquidity": 1,
+    "max_exit_impact_pct": 2
+   },
+   "confidence": "high",
+   "sources": [
+    "https://rareskills.io/post/uniswap-v2-price-impact",
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins"
+   ]
+  },
+  {
+   "id": "volume-at-least-10x-position",
+   "category": "entry",
+   "rule": "Require 24h volume of at least 10x your intended position size, from organic-looking flow, before entering.",
+   "rationale": "Altrady's liquidity rule. Combine it with the wash-volume check, because bot volume can fake this easily.",
+   "applies_to": [
+    "turnover:low"
+   ],
+   "params": {
+    "min_volume_to_position_ratio": 10
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins",
+    "https://bitquery.io/blog/solana-volume-numbers-are-a-lie"
+   ]
+  },
+  {
+   "id": "liquidity-to-mcap-ratio",
+   "category": "entry",
+   "rule": "Prefer liquidity at 10% or more of market cap; below ~5%, treat the valuation as unexitable and skip or use minimum size.",
+   "rationale": "This is a common practitioner heuristic, not a measured cutoff. The mechanics follow from constant-product math: a thin pool behind a large market cap means any meaningful holder selling craters price.",
+   "applies_to": [
+    "liq:<25k",
+    "liq:25k-100k"
+   ],
+   "params": {
+    "preferred_liq_mcap_pct": 10,
+    "min_liq_mcap_pct": 5
+   },
+   "confidence": "low",
+   "sources": [
+    "https://rareskills.io/post/uniswap-v2-price-impact",
+    "https://createmycoin.app/articles/what-is-dexscreener"
+   ]
+  },
+  {
+   "id": "require-buyer-dominated-flow",
+   "category": "entry",
+   "rule": "Enter only when recent buys at least match sells and unique makers/holders are growing; skip when sellers dominate 5m and 1h.",
+   "rationale": "Buy/sell count direction and holder growth are the standard DexScreener/Nansen momentum confirmations. Rising price on falling makers suggests a few wallets painting the chart.",
+   "applies_to": [
+    "flow:sellers",
+    "flow:balanced",
+    "flow:buyers"
+   ],
+   "params": {
+    "min_buy_sell_ratio_1h": 1.0
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://createmycoin.app/articles/what-is-dexscreener",
+    "https://nansen.ai/post/how-to-identify-the-next-viral-memecoin-using-nansen"
+   ]
+  },
+  {
+   "id": "dont-chase-vertical-candles",
+   "category": "entry",
+   "rule": "Skip entries after a vertical move (e.g., +100% in 1h); wait for a pullback that holds above the breakout with buyers still present.",
+   "rationale": "Nansen says 'don't chase pumps'. Late curve entries arrive after the easy move and become exit liquidity for insiders. TradesViz reports worse outcomes on reactive entries. The +100% cutoff is a heuristic.",
+   "applies_to": [
+    "h1:moon",
+    "h1:pump"
+   ],
+   "params": {
+    "max_h1_change_for_entry_pct": 100
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://nansen.ai/post/how-to-identify-the-next-viral-memecoin-using-nansen",
+    "https://www.tradesviz.com/trading-psychology/",
+    "https://crypto.news/how-meme-coins-are-made-bonding-curves-pump-fun-rug-pulls/"
+   ]
+  },
+  {
+   "id": "skip-first-minutes-of-launch",
+   "category": "entry",
+   "rule": "Do not buy in the first 5-10 minutes of a pair's life; let sniper and bot activity play out first.",
+   "rationale": "Altrady recommends entering after the first 5-10 minutes to avoid sandwich and sniper disadvantage. DeFade flags launches where snipers make 50%+ of initial volume.",
+   "applies_to": [
+    "age:<1h"
+   ],
+   "params": {
+    "min_pair_age_min": 10
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading",
+    "https://defade.org/blog/how-to-spot-solana-rug-pull"
+   ]
+  },
+  {
+   "id": "minimum-activity-and-mcap",
+   "category": "entry",
+   "rule": "Ignore tokens with fewer than 100 transactions or, for graduated tokens, under ~$100k market cap.",
+   "rationale": "GMGN's guide filters out inactive tokens under 100 transactions and focuses on completed tokens of at least $100k-$200k to avoid pump-and-dumps.",
+   "applies_to": [
+    "turnover:low",
+    "liq:<25k"
+   ],
+   "params": {
+    "min_txns": 100,
+    "min_mcap_graduated_usd": 100000
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://docs.gmgn.ai/index/gmgn-meme-trading-guide"
+   ]
+  },
+  {
+   "id": "dont-catch-falling-memecoins",
+   "category": "entry",
+   "rule": "Do not buy memecoins down over 30% in 1h while sellers dominate; dead-cat bounces are the norm, recoveries the exception.",
+   "rationale": "Most memecoins that break never recover: 60% of migrated tokens lost 80% within 20 minutes (MemeTrans), and 80% of pump.fun tokens die within a day. The -30% cutoff is a heuristic.",
+   "applies_to": [
+    "h1:dump",
+    "flow:sellers"
+   ],
+   "params": {
+    "max_h1_drop_for_entry_pct": -30
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://arxiv.org/html/2602.13480v1",
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens"
+   ]
+  },
+  {
+   "id": "cost-hurdle-for-entry",
+   "category": "entry",
+   "rule": "Only enter if a realistic first target exceeds round-trip costs by at least 3x; with ~5-6% memecoin round trips, skip setups offering under +15-20%.",
+   "rationale": "Solbotrank estimates ~5.8%+ round trip before slippage for small bot trades. The pump.fun curve charges 1.25% per trade and PumpSwap 0.25%. The 3x multiple is a heuristic.",
+   "applies_to": [
+    "liq:<25k",
+    "liq:25k-100k"
+   ],
+   "params": {
+    "assumed_roundtrip_cost_pct": 5,
+    "min_target_to_cost_ratio": 3
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://solbotrank.com/guides/solana-priority-fees-and-slippage",
+    "https://pump.fun/docs/bonding-curve"
+   ]
+  },
+  {
+   "id": "predefine-full-exit-plan",
+   "category": "exit",
+   "rule": "At entry, record hard stop, first take-profit, trailing rule and time stop; never open a position without all four defined.",
+   "rationale": "Pre-committed exits counter the disposition effect (Odean: winners sold 1.5x more readily than losers, costing 3-5%/yr). Every memecoin exit guide reviewed insists on targets set before entry.",
+   "applies_to": [],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/loss-aversion/",
+    "https://fomo.family/answers/when-to-sell-a-memecoin",
+    "https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026"
+   ]
+  },
+  {
+   "id": "first-tranche-take-profit",
+   "category": "exit",
+   "rule": "Sell 30-50% of a memecoin position at the first target (+40-100%, lower for bigger caps), recovering most of the initial stake.",
+   "rationale": "Odin suggests first take-profits of 1.5-2x for $100k-500k tokens and 2-3x under $50k. Fomo suggests selling 25-50% at the first goal. Given 60%+ post-pump collapses, banking early matters. The percentages are heuristics.",
+   "applies_to": [
+    "h1:pump",
+    "h1:moon",
+    "liq:25k-100k",
+    "liq:100k-500k"
+   ],
+   "params": {
+    "first_take_profit_pct": 50,
+    "first_take_profit_fraction": 0.4
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026",
+    "https://fomo.family/answers/when-to-sell-a-memecoin",
+    "https://arxiv.org/html/2602.13480v1"
+   ]
+  },
+  {
+   "id": "second-tranche-take-profit",
+   "category": "exit",
+   "rule": "Sell another 25-30% at a second target (about 2-3x the first gain, e.g., +100-200%), leaving at most 20-30% as a trailed runner.",
+   "rationale": "Laddered exits appear in every memecoin source reviewed: Altrady 25% at 2x/3x/5x/10x, Odin 25% at 2x then 50% at 5x, Fomo half at 2x and the rest at 5x.",
+   "applies_to": [
+    "h1:pump",
+    "h1:moon"
+   ],
+   "params": {
+    "second_take_profit_pct": 150,
+    "second_take_profit_fraction": 0.3,
+    "max_runner_fraction": 0.3
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins",
+    "https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026",
+    "https://fomo.family/answers/when-to-sell-a-memecoin"
+   ]
+  },
+  {
+   "id": "breakeven-after-first-tranche",
+   "category": "exit",
+   "rule": "Once the first take-profit fills, move the remaining position's stop to entry plus costs; the trade must not close as a net loss.",
+   "rationale": "Breakeven stops cost edge in trend systems (Mabe found no variant improved profit). They are defensible here because the first tranche already banked gains and most memecoins round-trip. Tie the move to TP1, not an arbitrary small gain.",
+   "applies_to": [
+    "h1:pump",
+    "h1:moon"
+   ],
+   "params": {
+    "breakeven_trigger": "after_first_tp",
+    "breakeven_buffer_pct": 3
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.tradingheroes.com/move-stoploss-breakeven/",
+    "https://davemabe.com/why-i-never-move-my-stop-to-breakeven",
+    "https://arxiv.org/html/2602.13480v1"
+   ]
+  },
+  {
+   "id": "never-let-winner-become-loser",
+   "category": "exit",
+   "rule": "If an open trade reached +30% or more and has fallen back to +5% or less, close it immediately.",
+   "rationale": "This targets the bot's observed failure: gains evaporating into stop-outs. TradesViz recommends MFE-vs-exit analysis to stop giving back open profit. The +30%/+5% thresholds are heuristics.",
+   "applies_to": [
+    "h1:flat",
+    "h1:dump",
+    "flow:sellers"
+   ],
+   "params": {
+    "roundtrip_trigger_peak_pct": 30,
+    "roundtrip_exit_floor_pct": 5
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/loss-aversion/",
+    "https://fomo.family/answers/when-to-sell-a-memecoin"
+   ]
+  },
+  {
+   "id": "ratchet-profit-floor",
+   "category": "exit",
+   "rule": "Ratchet a profit floor: once peak gain reaches +50%, lock at least half of the peak gain; raise it as new highs print.",
+   "rationale": "Fomo gives the example 'up 5x, don't let it drop below 3x'. Locking about 50% of the peak gain generalizes that and complements a percentage trail on small gains. The 50% fraction is a heuristic.",
+   "applies_to": [
+    "h1:pump",
+    "h1:moon"
+   ],
+   "params": {
+    "floor_activation_gain_pct": 50,
+    "lock_fraction_of_peak_gain": 0.5
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://fomo.family/answers/when-to-sell-a-memecoin",
+    "https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026"
+   ]
+  },
+  {
+   "id": "trail-runner-with-volatility-sized-stop",
+   "category": "exit",
+   "rule": "Trail the runner 20-30% below its highest price; use 15-20% only for parabolic spikes, 30-40% for slow grinding trends.",
+   "rationale": "Odin's guidance is 15-20% for sharp fast pumps and 30-40% for gradual trends. Altrady trails 30% from the high after 2x. Trails tighter than normal pullback depth get shaken out, which is the logic behind Chandelier's 3x ATR.",
+   "applies_to": [
+    "h1:pump",
+    "h1:moon"
+   ],
+   "params": {
+    "trail_pct_default": 25,
+    "trail_pct_parabolic": 18,
+    "trail_pct_grind": 35
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026",
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins",
+    "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-overlays/chandelier-exit"
+   ]
+  },
+  {
+   "id": "hard-stop-on-entry",
+   "category": "exit",
+   "rule": "Set a hard stop of -20% to -30% for liquid DEX memecoins; widen to -40% only with half size or less.",
+   "rationale": "Odin lists tight stops at -20 to -30%, standard -40 to -50%, and wide -60 to -70% with smaller size. Altrady suggests -30 to -50%. Tighter stops suit a bot re-evaluating every few minutes, since you cannot watch the chart.",
+   "applies_to": [
+    "liq:25k-100k",
+    "liq:100k-500k",
+    "liq:>500k"
+   ],
+   "params": {
+    "hard_stop_pct": -25,
+    "wide_stop_pct": -40,
+    "wide_stop_size_multiplier": 0.5
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026",
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins"
+   ]
+  },
+  {
+   "id": "time-stop-no-progress",
+   "category": "exit",
+   "rule": "Exit a young-token position that has not reached +10% within 60-90 minutes; for tokens older than 7 days, allow 12-24 hours.",
+   "rationale": "Sources disagree on duration: Altrady says 6-12h (pump.fun) or 24h, Fomo 24-48h. Most pump.fun tokens die on launch day (CoinGecko), so this bot's minute-level cadence justifies shorter windows. The exact minutes are heuristic and need backtesting.",
+   "applies_to": [
+    "age:<1h",
+    "age:1-6h",
+    "age:6-24h",
+    "h1:flat"
+   ],
+   "params": {
+    "time_stop_min_young": 90,
+    "time_stop_progress_pct": 10,
+    "time_stop_h_aged": 24
+   },
+   "confidence": "low",
+   "sources": [
+    "https://www.tradingview.com/chart/EURUSD/JsH2RCAg-Trade-Management-Using-Time-Stops/",
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading",
+    "https://fomo.family/answers/when-to-sell-a-memecoin",
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens"
+   ]
+  },
+  {
+   "id": "exit-on-seller-dominance",
+   "category": "exit",
+   "rule": "Cut or halve the position when 5m and 1h sells outnumber buys (ratio about 1.5:1) while price is falling.",
+   "rationale": "Seller-dominated flow after a pump is how insider distribution appears on DexScreener. Deferring the exit to a price stop risks gaps in thin pools. The 1.5:1 ratio is a heuristic.",
+   "applies_to": [
+    "flow:sellers",
+    "h1:dump",
+    "h1:flat"
+   ],
+   "params": {
+    "sell_buy_ratio_exit": 1.5
+   },
+   "confidence": "low",
+   "sources": [
+    "https://createmycoin.app/articles/what-is-dexscreener",
+    "https://blog.bubblemaps.io/how-to-analyze-meme-coin-holders-with-bubblemaps/"
+   ]
+  },
+  {
+   "id": "exit-when-volume-dies",
+   "category": "exit",
+   "rule": "Exit when 1h volume falls below ~30% of its level at entry and price is not making new highs; dying volume precedes memecoin death.",
+   "rationale": "Lifespan studies define memecoin 'death' by collapsing trading volume (Chainplay), and most tokens hit it within a day. Volume leaving means no buyers left for your exit. The 30% cutoff is a heuristic.",
+   "applies_to": [
+    "turnover:low",
+    "h1:flat"
+   ],
+   "params": {
+    "volume_decay_exit_ratio": 0.3
+   },
+   "confidence": "low",
+   "sources": [
+    "https://chainplay.gg/blog/lifespan-pump-fun-memecoins-analysis/",
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens"
+   ]
+  },
+  {
+   "id": "exit-on-insider-distribution",
+   "category": "exit",
+   "rule": "Exit immediately if the creator wallet sells, top-holder share drops sharply, or large holder clusters start splitting into fresh wallets.",
+   "rationale": "Bubblemaps says large clusters fragmenting into smaller wallets often precedes selling. DeFade flags early dev selling as an exit signal.",
+   "applies_to": [
+    "rug:warn",
+    "rug:danger",
+    "flow:sellers"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://blog.bubblemaps.io/how-to-analyze-meme-coin-holders-with-bubblemaps/",
+    "https://defade.org/blog/how-to-spot-solana-rug-pull"
+   ]
+  },
+  {
+   "id": "exit-on-liquidity-drain",
+   "category": "exit",
+   "rule": "Market-sell immediately if pool liquidity drops over 30% outside of normal price moves, or if rug status worsens.",
+   "rationale": "Chainalysis defines pump-and-dump rugs by one address removing 65-70%+ of pool liquidity. Once that finishes, remaining holders cannot exit ($300 or less of liquidity left in their cases).",
+   "applies_to": [
+    "rug:warn",
+    "rug:danger",
+    "liq:<25k",
+    "liq:25k-100k"
+   ],
+   "params": {
+    "liquidity_drop_exit_pct": 30
+   },
+   "confidence": "high",
+   "sources": [
+    "https://www.chainalysis.com/blog/crypto-crime-2024-pump-and-dump/",
+    "https://www.chainalysis.com/blog/crypto-market-manipulation-wash-trading-pump-and-dump-2025/"
+   ]
+  },
+  {
+   "id": "assume-stops-gap",
+   "category": "exit",
+   "rule": "Assume stop exits fill 5-20% worse than the trigger in thin pools; size positions so a gapped stop still stays within risk budget.",
+   "rationale": "LuxAlgo: a stop defines where the exit triggers, not the fill you receive. Altrady puts price impact at 10-20% below $30-50k liquidity. A bot that polls every few minutes adds further gap risk.",
+   "applies_to": [
+    "liq:<25k",
+    "liq:25k-100k"
+   ],
+   "params": {
+    "assumed_stop_slippage_pct": 10
+   },
+   "confidence": "high",
+   "sources": [
+    "https://www.luxalgo.com/library/concept/atr-based-stop-distance/",
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading"
+   ]
+  },
+  {
+   "id": "max-hold-young-memecoins",
+   "category": "exit",
+   "rule": "Close any position in a token under 24h old within 24h of entry, regardless of P&L.",
+   "rationale": "80% of pump.fun tokens are dead by day 1 and the average lifespan is ~12 days (Chainplay). Holding young tokens overnight means sitting through the most likely death window. The 24h cap is a heuristic.",
+   "applies_to": [
+    "age:<1h",
+    "age:1-6h",
+    "age:6-24h"
+   ],
+   "params": {
+    "max_hold_h_young": 24
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens",
+    "https://chainplay.gg/blog/lifespan-pump-fun-memecoins-analysis/"
+   ]
+  },
+  {
+   "id": "sell-into-strength",
+   "category": "exit",
+   "rule": "Execute take-profit tranches into green candles with strong buy flow, not after the reversal; liquidity to exit is best while buyers are active.",
+   "rationale": "GMGN's traders sell incrementally as targets hit and emphasize selling at the first sign of red. Reversals in thin memecoin pools gap through levels.",
+   "applies_to": [
+    "h1:pump",
+    "h1:moon",
+    "flow:buyers"
+   ],
+   "params": {},
+   "confidence": "low",
+   "sources": [
+    "https://docs.gmgn.ai/index/gmgn-meme-trading-guide",
+    "https://fomo.family/answers/when-to-sell-a-memecoin"
+   ]
+  },
+  {
+   "id": "stops-wider-than-poll-noise",
+   "category": "exit",
+   "rule": "Set trailing and hard stops at 1.5-3x the recent 5-minute ATR, never tighter, so normal noise between checks does not trigger them.",
+   "rationale": "LuxAlgo: published practice is ~1.5x ATR for short-term and ~3x for trend following, measured on the timeframe you trade. StockCharts raises the multiplier for more volatile assets.",
+   "applies_to": [],
+   "params": {
+    "atr_timeframe_min": 5,
+    "atr_mult_min": 1.5,
+    "atr_mult_max": 3
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.luxalgo.com/library/concept/atr-based-stop-distance/",
+    "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-overlays/chandelier-exit"
+   ]
+  },
+  {
+   "id": "risk-per-trade-cap",
+   "category": "risk",
+   "rule": "Risk 0.5-1% of equity per memecoin trade, measured as position size times distance to stop plus expected slippage.",
+   "rationale": "Altrady: at 1% risk, 10 straight losses cost ~8-10%; at 10%, an 80% loss rate is account-ending. Backtestbase recommends 1-2%.",
+   "applies_to": [],
+   "params": {
+    "risk_per_trade_pct": 1
+   },
+   "confidence": "high",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins",
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading",
+    "https://www.backtestbase.com/education/losing-streak-calculator-trading"
+   ]
+  },
+  {
+   "id": "position-cap-for-rug-risk",
+   "category": "risk",
+   "rule": "Cap any single memecoin position at 3-5% of equity, since a rug or honeypot turns the stop distance into -100%.",
+   "rationale": "Stops do not protect against liquidity pulls, freezes or honeypots. Altrady treats DEX memecoin signals as lottery-ticket sizes you can afford to lose entirely. The 3-5% cap is a heuristic.",
+   "applies_to": [
+    "rug:warn",
+    "liq:<25k",
+    "age:<1h"
+   ],
+   "params": {
+    "max_position_pct_equity": 5,
+    "max_position_pct_equity_warn": 2
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading",
+    "https://www.chainalysis.com/blog/crypto-market-manipulation-wash-trading-pump-and-dump-2025/"
+   ]
+  },
+  {
+   "id": "daily-loss-limit",
+   "category": "risk",
+   "rule": "Stop opening new trades for the day after realized losses reach 3-5% of equity.",
+   "rationale": "Altrady mandates a 3-5% daily loss limit. TradesViz recommends mandatory cool-downs after losses to stop revenge trading.",
+   "applies_to": [],
+   "params": {
+    "daily_loss_limit_pct": 4
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins",
+    "https://www.tradesviz.com/trading-psychology/"
+   ]
+  },
+  {
+   "id": "limit-concurrent-positions",
+   "category": "risk",
+   "rule": "Hold no more than 5 memecoin positions at once, and no more than 2 opened in the same 15 minutes.",
+   "rationale": "Memecoins sell off together when sector flow leaves (sector market cap fell 84% from its peak), so many positions do not diversify. Altrady's practical budget is 5-10 small positions. The limits here are heuristics.",
+   "applies_to": [],
+   "params": {
+    "max_concurrent_positions": 5,
+    "max_new_positions_per_15min": 2
+   },
+   "confidence": "low",
+   "sources": [
+    "https://www.altrady.com/blog/crypto-trading-strategies/pump-fun-solana-memecoin-trading",
+    "https://www.bestbrokers.com/crypto-brokers/the-heat-death-of-memecoins/"
+   ]
+  },
+  {
+   "id": "judge-by-expectancy-not-winrate",
+   "category": "risk",
+   "rule": "Track results in R-multiples; a 30-40% win rate is fine if average win is at least 2.5-3x average loss. Fix exits first if not.",
+   "rationale": "Expectancy = p*AvgWinR + (1-p)*AvgLossR. A 30% win rate with 5R winners vs 1R losers is strongly positive (Van Tharp via TraderLion/PnL Ledger). Small, frequent losses are acceptable; round-tripped winners are not.",
+   "applies_to": [],
+   "params": {
+    "min_payoff_ratio": 2.5
+   },
+   "confidence": "high",
+   "sources": [
+    "https://www.pnlledger.com/expectancy-r-multiples-the-plain-english-guide/"
+   ]
+  },
+  {
+   "id": "expect-long-losing-streaks",
+   "category": "risk",
+   "rule": "Expect losing streaks of 8-12 trades at low win rates; do not change strategy or increase size because of a streak alone.",
+   "rationale": "Streak probability is lossRate^n: at a 30% win rate, 10 straight losses has 0.7^10 = 2.8% per sequence, so over hundreds of trades it will happen. Sizing must survive it.",
+   "applies_to": [],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://www.backtestbase.com/education/losing-streak-calculator-trading"
+   ]
+  },
+  {
+   "id": "slippage-tolerance-caps",
+   "category": "risk",
+   "rule": "Use at most 1-2% slippage tolerance on majors and 5-10% on memecoins; never above 20%, which invites sandwich attacks.",
+   "rationale": "Jupiter warns that slippage over 20% led to sandwich attacks. GMGN uses 0.5% for normal and 10% for trending tokens. Bot defaults of 15-50% exist but trade execution certainty for MEV loss.",
+   "applies_to": [
+    "liq:<25k",
+    "liq:25k-100k",
+    "liq:>500k"
+   ],
+   "params": {
+    "slippage_majors_pct": 1,
+    "slippage_memes_pct": 8,
+    "slippage_hard_max_pct": 20
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://solbotrank.com/guides/solana-priority-fees-and-slippage",
+    "https://docs.gmgn.ai/index/gmgn-meme-trading-guide"
+   ]
+  },
+  {
+   "id": "model-fees-in-paper-pnl",
+   "category": "risk",
+   "rule": "In paper trading, deduct ~1-3% per side for memecoins (DEX fee, priority fee, price impact) so simulated results aren't overstated.",
+   "rationale": "Solbotrank estimates ~2.9% one-way for a 0.5 SOL bot trade before slippage. PumpSwap charges 0.25% and the pump.fun curve 1.25%. Paper P&L without costs overstates the edge of high-turnover strategies.",
+   "applies_to": [],
+   "params": {
+    "paper_cost_per_side_pct_memes": 1.5,
+    "paper_cost_per_side_pct_majors": 0.3
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://solbotrank.com/guides/solana-priority-fees-and-slippage",
+    "https://pump.fun/docs/bonding-curve"
+   ]
+  },
+  {
+   "id": "majors-use-atr-stops",
+   "category": "majors",
+   "rule": "For JUP/BONK/WIF-type majors, set stops at 2-3x ATR on the 1h-4h chart rather than fixed memecoin percentages.",
+   "rationale": "Majors have deep, stable liquidity and slower volatility regimes, so volatility-scaled stops fit. Chandelier's default is 3x ATR(22), and LuxAlgo gives 1.5-3x by horizon.",
+   "applies_to": [
+    "liq:>500k",
+    "age:>7d"
+   ],
+   "params": {
+    "atr_timeframe": "1h",
+    "atr_mult": 2.5
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-overlays/chandelier-exit",
+    "https://www.luxalgo.com/library/concept/atr-based-stop-distance/"
+   ]
+  },
+  {
+   "id": "majors-smaller-targets-longer-holds",
+   "category": "majors",
+   "rule": "On majors, target 2-3R moves (typically +5-15%) over hours to days; don't use 2x/5x memecoin ladders or minute-scale time stops.",
+   "rationale": "Laddered 2-10x targets come from micro-cap memecoin guides. Majors rarely move that far quickly. Time stops should match the strategy horizon (TradingView examples: hours to 3 days). Target sizes are heuristics.",
+   "applies_to": [
+    "liq:>500k",
+    "age:>7d"
+   ],
+   "params": {
+    "majors_target_r": 2.5,
+    "majors_time_stop_h": 48
+   },
+   "confidence": "low",
+   "sources": [
+    "https://www.tradingview.com/chart/EURUSD/JsH2RCAg-Trade-Management-Using-Time-Stops/",
+    "https://traderssecondbrain.com/guides/take-profit-methods"
+   ]
+  },
+  {
+   "id": "majors-are-not-safe",
+   "category": "majors",
+   "rule": "Always use stops on 'blue-chip' memecoins too; they can lose 80% in a year.",
+   "rationale": "BestBrokers: dogwifhat fell 79.85% and Fartcoin 87.9% over the period studied, and total memecoin market cap fell 84% from its December 2024 ATH.",
+   "applies_to": [
+    "liq:>500k",
+    "age:>7d"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.bestbrokers.com/crypto-brokers/the-heat-death-of-memecoins/"
+   ]
+  },
+  {
+   "id": "majors-can-size-larger-but-correlated",
+   "category": "majors",
+   "rule": "Majors may take larger size (deeper liquidity, lower impact), but count them as one correlated bet with SOL/BTC direction.",
+   "rationale": "Kaiko: 1% market depth for DOGE/SHIB/PEPE/WIF/BONK etc. reached a record $128M, yet spreads stay wide because volatility is high. Analysts note memes follow BTC direction.",
+   "applies_to": [
+    "liq:>500k"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://finance.yahoo.com/news/meme-coin-liquidity-hits-record-115522957.html",
+    "https://www.blocmates.com/news-posts/is-it-game-over-for-memes"
+   ]
+  },
+  {
+   "id": "majors-holder-checks-differ",
+   "category": "majors",
+   "rule": "Don't reject majors on raw top-10 concentration; exchange, treasury and pool wallets dominate their top holders legitimately.",
+   "rationale": "Bubblemaps notes healthy tokens show legitimate exchange and liquidity pools among top holders. Concentration rules tuned for fresh launches will false-flag established tokens.",
+   "applies_to": [
+    "liq:>500k",
+    "age:>7d",
+    "rug:warn"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://blog.bubblemaps.io/how-to-analyze-meme-coin-holders-with-bubblemaps/"
+   ]
+  },
+  {
+   "id": "never-average-down-memecoins",
+   "category": "psychology",
+   "rule": "Never add to a losing memecoin position; only add to winners after a successful retest, and only within risk limits.",
+   "rationale": "Averaging down comes from loss aversion (losses feel about 2x as painful). For assets where 80% die within a day, it concentrates capital in likely zeros.",
+   "applies_to": [
+    "h1:dump",
+    "flow:sellers"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/",
+    "https://www.coingecko.com/research/publications/average-lifespan-of-pumpfun-tokens"
+   ]
+  },
+  {
+   "id": "no-revenge-trading",
+   "category": "psychology",
+   "rule": "After 3 consecutive losses or a stop-out over 2% of equity, pause new entries for at least 60 minutes.",
+   "rationale": "TradesViz: trades taken right after losses underperform planned entries, so enforce cool-downs. Altrady prescribes a 24h pause after losses over 2%. The 60-minute bot pause is a heuristic.",
+   "applies_to": [],
+   "params": {
+    "cooldown_after_consecutive_losses": 3,
+    "cooldown_min": 60
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/",
+    "https://www.altrady.com/blog/crypto-trading-strategies/how-to-trade-memecoins"
+   ]
+  },
+  {
+   "id": "only-trade-defined-setups",
+   "category": "psychology",
+   "rule": "Enter only when every entry filter passes; missing a pump is never a reason to lower standards (FOMO).",
+   "rationale": "TradesViz reports markedly worse outcomes on unplanned, reactive entries than on planned ones. With less than 2% of launches graduating, missed pumps are constant and irrelevant.",
+   "applies_to": [
+    "h1:moon"
+   ],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/",
+    "https://www.odaily.news/en/post/5197733"
+   ]
+  },
+  {
+   "id": "cap-trade-frequency",
+   "category": "psychology",
+   "rule": "Cap new entries per day (e.g., 10-15); an idle cycle is a valid decision and overtrading bleeds costs.",
+   "rationale": "Barber & Odean: the most active households earned 11.4%/yr vs a 17.9% market return. At ~5% memecoin round-trip costs, extra marginal trades are strongly negative. The cap is a heuristic.",
+   "applies_to": [],
+   "params": {
+    "max_new_trades_per_day": 12
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/",
+    "https://solbotrank.com/guides/solana-priority-fees-and-slippage"
+   ]
+  },
+  {
+   "id": "distrust-shills-and-kols",
+   "category": "psychology",
+   "rule": "Treat influencer calls, paid trending and sudden social hype as likely exit liquidity for insiders, not as buy signals.",
+   "rationale": "A standard extraction pattern is insiders accumulating at near-zero cost and then promoting to dump (crypto.news). A KOL-wallet study found genuinely profitable KOLs are rare (~2% recall).",
+   "applies_to": [
+    "h1:moon",
+    "turnover:high"
+   ],
+   "params": {},
+   "confidence": "medium",
+   "sources": [
+    "https://crypto.news/how-meme-coins-are-made-bonding-curves-pump-fun-rug-pulls/",
+    "https://www.emergentmind.com/topics/key-opinion-leader-kol-wallets",
+    "https://docs.dexscreener.com/boosting"
+   ]
+  },
+  {
+   "id": "cut-losers-faster-than-winners",
+   "category": "psychology",
+   "rule": "Your average losing hold time should be shorter than your average winning hold time; if not, you are hoping, not trading.",
+   "rationale": "Odean (1998): investors are 1.5x more likely to sell winners than losers, costing 3-5%/yr. TradesViz recommends comparing winner and loser hold times as a health check.",
+   "applies_to": [],
+   "params": {},
+   "confidence": "high",
+   "sources": [
+    "https://www.tradesviz.com/trading-psychology/loss-aversion/"
+   ]
+  },
+  {
+   "id": "shrink-in-cold-meme-regime",
+   "category": "market_regime",
+   "rule": "When memecoin sector volume and launchpad activity are falling for weeks, halve size, lower targets and take profits earlier.",
+   "rationale": "BestBrokers: memecoin market cap fell 84% from its ATH, monthly volume fell 79%, and pump.fun daily new users fell 89%. Mid-2026 graduation rates dropped to ~0.26%. Follow-through is weaker in cold regimes.",
+   "applies_to": [],
+   "params": {
+    "cold_regime_size_multiplier": 0.5
+   },
+   "confidence": "medium",
+   "sources": [
+    "https://www.bestbrokers.com/crypto-brokers/the-heat-death-of-memecoins/",
+    "https://solanacompass.com/news/pumpfun-launched-42000-tokens-in-one-day-fewer-than-2-will-ever-reach-a-dex"
+   ]
+  },
+  {
+   "id": "respect-btc-sol-direction",
+   "category": "market_regime",
+   "rule": "Avoid new memecoin longs while SOL and BTC are in a sharp intraday selloff; memes are high-beta and lose flow first.",
+   "rationale": "Analysts expect memes to follow BTC direction (blocmates), and Kaiko notes they stay risky despite deep books. Evidence is qualitative; SOL and memecoin performance also decouple at times.",
+   "applies_to": [
+    "h1:dump"
+   ],
+   "params": {
+    "sol_h1_drop_block_pct": -3
+   },
+   "confidence": "low",
+   "sources": [
+    "https://www.blocmates.com/news-posts/is-it-game-over-for-memes",
+    "https://finance.yahoo.com/news/meme-coin-liquidity-hits-record-115522957.html"
+   ]
+  },
+  {
+   "id": "prefer-us-session-liquidity",
+   "category": "market_regime",
+   "rule": "Favor entries during 13:00-17:00 UTC (US morning/EU afternoon); be stricter from 06:00-10:00 UTC, when spreads widen and rugs cluster.",
+   "rationale": "A single practitioner log of 200+ trades reported 2.3x volume per token 9AM-12PM EST, 40% wider spreads 2-6AM EST, and rugs concentrated 1-4AM EST. Weak evidence; verify with the bot's own data.",
+   "applies_to": [],
+   "params": {
+    "preferred_utc_start": 13,
+    "preferred_utc_end": 17,
+    "caution_utc_start": 6,
+    "caution_utc_end": 10
+   },
+   "confidence": "low",
+   "sources": [
+    "https://degenspaced.vercel.app/blog/best-time-to-trade-memecoins-solana"
+   ]
+  }
+ ]
+}

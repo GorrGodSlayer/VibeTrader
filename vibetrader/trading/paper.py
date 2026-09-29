@@ -40,9 +40,10 @@ class PaperBroker:
         self._set_cash(cash - usd)
         return Fill(qty=qty, price=usd / qty if qty else fill_price, usd=usd, fee_usd=fee, tx="PAPER")
 
-    async def sell(self, trade: dict[str, Any], price: float, liquidity_usd: float) -> Fill:
+    async def sell(self, trade: dict[str, Any], price: float, liquidity_usd: float, qty: float | None = None) -> Fill:
+        """Sell `qty` tokens (default: the whole position)."""
         s = self.settings()
-        qty = float(trade["qty"])
+        qty = float(trade["qty"] if qty is None else min(qty, trade["qty"]))
         gross = qty * price
         fill_price = price * (1 - slippage_pct(gross, liquidity_usd, s.paper_base_slippage_pct) / 100)
         proceeds = qty * max(fill_price, 0)

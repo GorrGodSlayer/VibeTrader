@@ -1,4 +1,4 @@
-"""MAGIC8BALL.EXE - dumb heuristic brain used only when no GROQ_API_KEY is set (paper only)."""
+"""Rule-based stand-in brain, used only when no GROQ_API_KEY is set (paper only)."""
 from __future__ import annotations
 
 from typing import Any
@@ -20,9 +20,8 @@ def heuristic_decision(f: dict[str, Any]) -> dict[str, Any]:
         "size_pct": 5,
         "stop_loss_pct": 12,
         "take_profit_pct": 30,
-        "reasoning": f"[MAGIC8BALL] buy ratio {br:.2f}, 1h {h1:+.1f}%, score {score:.2f}. Signs point to "
-        + ("yes." if buy else "ask again later."),
-        "meme_vibe_score": min(10, int(score * 10)),
+        "reasoning": f"Heuristic score {score:.2f} (1h buy ratio {br:.2f}, 1h change {h1:+.1f}%).",
+        "hype_score": min(10, int(score * 10)),
     }
 
 
@@ -30,8 +29,8 @@ def heuristic_postmortem(trade: dict[str, Any]) -> dict[str, Any]:
     won = (trade.get("pnl_pct") or 0) > 0
     b = ", ".join(trade.get("buckets") or [])
     return {
-        "lesson": f"[MAGIC8BALL] {'Setups' if won else 'Avoid setups'} like {b} ({trade['exit_reason']}).",
-        "what_worked": "the dice" if won else "",
-        "what_failed": "" if won else "the dice",
-        "tags": ["magic8ball", "win" if won else "loss"],
+        "lesson": f"{'Favor' if won else 'Avoid'} setups matching {b} (exit: {trade['exit_reason']}).",
+        "what_worked": "",
+        "what_failed": "",
+        "tags": ["heuristic", "win" if won else "loss"],
     }

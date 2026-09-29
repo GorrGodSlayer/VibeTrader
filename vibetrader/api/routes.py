@@ -1,4 +1,4 @@
-"""FastAPI app: REST + SSE for the Win95 dashboard."""
+"""FastAPI app: REST + SSE for the dashboard."""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from vibetrader.brain import memory
+from vibetrader.brain import memory, playbook, strategy
 from vibetrader.config import env
 from vibetrader.trading.engine import Engine
 
@@ -30,11 +30,12 @@ async def lifespan(_: FastAPI):
     global engine
     engine = Engine(env)
     log.info("VibeTrader booted. brain=%s mode=%s", engine.brain_name, engine.mode)
+    engine.autostart()
     yield
     await engine.aclose()
 
 
-app = FastAPI(title="VibeTrader 95", lifespan=lifespan)
+app = FastAPI(title="VibeTrader", lifespan=lifespan)
 
 
 def eng() -> Engine:
@@ -54,7 +55,7 @@ async def basic_auth(request: Request, call_next):
             except Exception:
                 ok = False
         if not ok:
-            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="VibeTrader 95"'})
+            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="VibeTrader"'})
     return await call_next(request)
 
 
@@ -88,6 +89,8 @@ async def status():
         "mode": e.mode,
         "brain": e.brain_name,
         "groq_enabled": e.groq.enabled,
+        "groq": e.groq.status(),
+        "autonomy": e.autonomy_status(),
         "dry_run": env.live_dry_run,
         "last_error": e.last_error or e.groq.last_error,
         "last_tick": e.last_tick,
@@ -146,20 +149,39 @@ async def decisions(limit: int = 100):
     return eng().db.query("SELECT * FROM decisions ORDER BY id DESC LIMIT ?", (min(limit, 500),))
 
 
+@app.get("/api/brain/graph")
+async def brain_graph():
+    """The concept graph: concepts (clusters of similar lessons), synapses between them, and every lesson."""
+    e = eng()
+    lessons = e.db.query("SELECT id, ts, trade_id, symbol, pnl_pct, lesson, buckets, cited FROM lessons ORDER BY id")
+    return {**e.concepts.to_dict(), "lessons": lessons}
+
+
 @app.get("/api/brain")
-async def brain(q: str = "", sort: str = "newest", mode: str = "paper"):
+async def brain(q: str = "", sort: str = "newest", mode: str = "paper", concept: int | None = None):
     db = eng().db
     order = "cited DESC, id DESC" if sort == "cited" else "id DESC"
-    if q:
+    home = eng().concepts.concept(concept) if concept else None
+    if home:
+        ids = ",".join(str(int(i)) for i in home.members[-200:]) or "0"
+        lessons = db.query(f"SELECT * FROM lessons WHERE id IN ({ids}) ORDER BY {order}")
+    elif q:
         like = f"%{q}%"
         lessons = db.query(
-            f"SELECT * FROM lessons WHERE lesson LIKE ? OR tags LIKE ? OR symbol LIKE ? ORDER BY {order} LIMIT 200",
-            (like, like, like),
+            f"SELECT * FROM lessons WHERE lesson LIKE ? OR tags LIKE ? OR symbol LIKE ? OR buckets LIKE ? "
+            f"ORDER BY {order} LIMIT 200",
+            (like, like, like, like),
         )
     else:
         lessons = db.query(f"SELECT * FROM lessons ORDER BY {order} LIMIT 200")
     equity = db.query("SELECT ts, equity_usd FROM equity WHERE mode = ? ORDER BY rowid DESC LIMIT 600", (mode,))[::-1]
+    count = lambda sql: (db.one(sql) or {}).get("n", 0)  # noqa: E731
     return {
+        "counts": {
+            "lessons": count("SELECT COUNT(*) AS n FROM lessons"),
+            "trades": count("SELECT COUNT(*) AS n FROM trades WHERE status = 'closed'"),
+            "decisions": count("SELECT COUNT(*) AS n FROM decisions"),
+        },
         "lessons": lessons,
         "stats": memory.bucket_stats(db),
         "overall": {
@@ -191,8 +213,42 @@ async def get_settings():
 @app.post("/api/settings")
 async def post_settings(patch: dict[str, Any]):
     s = eng().save_settings(patch)
-    eng().say("SETTINGS.INI saved")
+    eng().say("Settings saved")
     return s.model_dump()
+
+
+@app.get("/api/playbook")
+async def get_playbook():
+    return playbook.summary()
+
+
+@app.get("/api/strategy")
+async def strategy_journal(limit: int = 50):
+    e = eng()
+    s = e.settings()
+    return {
+        "journal": e.db.query("SELECT * FROM strategy_changes ORDER BY id DESC LIMIT ?", (min(limit, 500),)),
+        "tunable": sorted([*strategy.TUNABLE, *strategy.TUNABLE_BOOL]),
+        "bounds": {k: [lo, hi] for k, (lo, hi, _) in strategy.TUNABLE.items()},
+        "current": strategy.tunable_snapshot(s),
+        "autonomy": e.autonomy_status(),
+    }
+
+
+@app.post("/api/strategy/review")
+async def strategy_review_now():
+    e = eng()
+    async with e.lock:
+        out = await e.maybe_review_strategy(e.settings(), force=True)
+    if out is None:
+        raise HTTPException(503, "Strategy review could not run (no Groq key or model unavailable)")
+    return out
+
+
+@app.post("/api/strategy/resume")
+async def strategy_resume():
+    eng().resume_now()
+    return {"ok": True}
 
 
 @app.post("/api/engine/start")

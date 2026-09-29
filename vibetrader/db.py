@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     action TEXT NOT NULL,
     confidence REAL,
     size_pct REAL,
-    vibe INTEGER,
+    hype INTEGER,
     reasoning TEXT,
     features TEXT NOT NULL DEFAULT '{}',
     executed INTEGER NOT NULL DEFAULT 0,
@@ -82,6 +82,16 @@ CREATE TABLE IF NOT EXISTS feature_stats (
     losses INTEGER NOT NULL DEFAULT 0,
     total_pnl_pct REAL NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS strategy_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    changes TEXT NOT NULL DEFAULT '{}',   -- {setting: [old, new]}
+    rejected TEXT NOT NULL DEFAULT '[]',
+    pause_minutes REAL NOT NULL DEFAULT 0,
+    reasoning TEXT,
+    trades_reviewed INTEGER,
+    model TEXT
+);
 CREATE TABLE IF NOT EXISTS equity (
     ts TEXT NOT NULL,
     mode TEXT NOT NULL,
@@ -90,7 +100,7 @@ CREATE TABLE IF NOT EXISTS equity (
 );
 """
 
-JSON_COLS = {"price_path", "features", "buckets", "tags"}
+JSON_COLS = {"price_path", "features", "buckets", "tags", "changes", "rejected"}
 
 
 def now_iso() -> str:
@@ -120,7 +130,19 @@ class DB:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.lock = threading.Lock()
+
+    def _migrate(self) -> None:
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(decisions)")}
+        if "vibe" in cols and "hype" not in cols:
+            self.conn.execute("ALTER TABLE decisions RENAME COLUMN vibe TO hype")
+        trade_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(trades)")}
+        for col, ddl in (("orig_qty", "REAL"), ("tranches_done", "INTEGER NOT NULL DEFAULT 0"),
+                         ("realized_usd", "REAL NOT NULL DEFAULT 0")):
+            if col not in trade_cols:
+                self.conn.execute(f"ALTER TABLE trades ADD COLUMN {col} {ddl}")
+        self.conn.commit()
 
     # ---- generic ----
     def query(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
